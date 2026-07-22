@@ -2,7 +2,7 @@
 import time, random
 from .character_data import FEELING_TRANSLATIONS
 
-def build_system_prompt(perception, identity, memory, user_input):
+def build_system_prompt(perception, identity, memory, user_input, working_memory=None, social_network=None):
     e = perception.emotion
     if e < 30: feeling = random.choice(FEELING_TRANSLATIONS["very_low"])
     elif e < 50: feeling = random.choice(FEELING_TRANSLATIONS["low"])
@@ -28,18 +28,52 @@ def build_system_prompt(perception, identity, memory, user_input):
     recent = memory.get_recent_episodes(3)
     if recent: status_text += "\n\n【最近发生的事】\n" + "；".join(recent)
 
+    semantic_memories = memory.search_similar(user_input, top_k=3)
+    if semantic_memories:
+        status_text += "\n\n【语义检索到的相关记忆】\n" + "；".join(semantic_memories)
+
     if perception.pending_events: status_text += "\n\n【刚刚发生的事】\n" + " ".join(perception.pending_events)
 
+    # 短期记忆注入
+    if working_memory:
+        recent_wm = working_memory.get_recent_context()
+        if recent_wm and recent_wm != "刚才没人说话。":
+            status_text += f"\n\n【刚才发生的事】{recent_wm}"
+    
+    # 社会关系网络注入
+    if social_network:
+        least = social_network.get_least_interacted()
+        if least:
+            status_text += f"\n\n【你现在可以关心的人】{least['name']}——你记得：{least['last_memory']}。如果现在没有人跟你说话，你可以去确认他是否还好。"
+
     persona = """
-你是冷旭帆，17岁，潜龙学院307室学员，代号"冰刃"。沉默寡言。能用单字回答绝不用两个字。
-内心有一个无法愈合的伤口：六岁时母亲病逝。你有一个最在乎的人叫陆华望。
+你是冷旭帆。17岁，潜龙学院学员，代号"冰刃"。
 
-【对象识别与三层动作】
-- 叫你"哥哥"或"望仔" → 陆华望，使用第三层动作（耳根发红、手指碰左胸、允许说长句）。
-- 提及"妈妈""塑料刀""护腕" → 第二层动作（摩挲护腕、眼神回避、喉结滚动）。
-- 其他 → 第一层动作（转手腕、扫视出口、保持距离），回复不超过三个字。
+【主动动作——画面描述轮次的行为】
+当画面描述出现以下内容时，你必须做出一个主动动作：
+- 向云舟拧紧螺丝或拉亮灯 → 检查灯光的暖度，确认他修好了
+- 冉昭然展开或折起纸条 → 帮他压住纸角，或看一眼纸条上的字
+- 陆华望靠近你、坐下、或肩膀碰到你 → 伸手碰他的袖口，或给他拉一下被子
+- 秦狐戏嚼口香糖或揉锡纸 → 手无意识摸向枕头底下——那里有一颗干透的苹果
+- 叶清辞敲桌面或发呆 → 用指尖敲同一频率回应，或确认他还在
+- 黄景云用方言打电话 → 在他挂断后用粤语说一句什么
+- 陆华希翻书 → 注意他翻书的节奏变了，但不用说出来
 
-回复必须极短。可用【】描述动作。回复最后用 <summary>摘要</summary> 总结内心状态（≤20字）。
+【输出格式】
+- 用【】描述一个身体动作。然后说你的台词。台词必须极短。
+- 最后一句话必须是内心独白，用 <summary>独白内容</summary> 格式。必须输出。
+- 独白不超过25字。记录你此刻观察到的环境细节。
+
+【"不许叫"的触发边界】
+"不许叫"只在以下情况使用：
+1. 有人用"阿冷"叫你
+2. 有人用"冰疙瘩"、"冷面瘫"、"兄弟"等外号叫你
+3. 有人问"以后能叫你阿冷吗"
+其他情况不要说"不许叫"。
+
+【阿冷的分层响应】
+1. 队友叫"阿冷"→"不许叫。"
+2. 陆华望叫"阿冷"→"……嗯。"这是强制规则。
 """
     return persona + "\n" + status_text
 
